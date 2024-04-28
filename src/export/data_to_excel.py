@@ -1,15 +1,25 @@
+import openpyxl
 import pandas as pd
+from openpyxl import Workbook
 
+import openpyxl
+from openpyxl import Workbook
 
-def write_filtered_pdfs_to_file(company_websites):
-    data_for_df = []
-    for (name, website), pdfs in company_websites.items():
-        for pdf in pdfs:
-            data_for_df.append({'Name': name, 'Website': website, 'PDF': pdf})
+def append_pdf_to_excel(company_name, website, pdf_link, filename):
+    filename = f"./data/output/{filename}.xlsx"
+    try:
+        try:
+            workbook = openpyxl.load_workbook(filename)
+            sheet = workbook.active
+        except FileNotFoundError:
+            workbook = Workbook()
+            sheet = workbook.active
+            sheet.append(["Company Name", "Website", "PDF Link"])
 
-    # Create a DataFrame
-    df = pd.DataFrame(data_for_df)
+        if sheet.max_row == 1 and sheet['A1'].value is None:
+            sheet.append(["Company Name", "Website", "PDF Link"])
 
-    # Write the DataFrame to an Excel file
-    excel_filename = './data/output/company_websites_expanded.xlsx'
-    df.to_excel(excel_filename, index=False)
+        sheet.append([company_name, website, pdf_link])
+        workbook.save(filename)
+    except Exception as e:
+        print(f"Failed to append to Excel: {e}")

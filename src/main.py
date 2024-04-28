@@ -1,50 +1,81 @@
-from data_extraction.company_name_extractor import extract_company_names_from_excel
-from data_extraction.pdf_link_extractor import crawl_for_pdfs
-from data_extraction.company_website_extractor import find_company_website
-from data_processing.process_pdfs import analyze_url_for_financial_content
-from export.data_to_excel import write_filtered_pdfs_to_file
+import time
 
-def main():
-    company_names = extract_company_names_from_excel("./data/input/ai_automation_project.xlsx")
-    process_company_pdfs(company_names)
+import aiohttp
+from src.extraction.company_pdf_extractor import extract_ei_pairs_from_excel
 
-def process_company_pdfs(company_names):
-    company_websites = {}
+from src.crawler.pdf_crawler import crawl_for_pdfs
+from src.extraction.company_website_extractor import find_company_website
+import asyncio
+from aiohttp import TCPConnector
+from src.crawler.pdf_processing import filter_given_pdf_links
 
-    # company_websites = {}
-    # for name in company_names:
-    #     website = find_company_website(name)
-    #     company_websites[(name, website)] = []
-    #     print(f"{name}: {website}")
-    #     if website != "Website not found.":
-    #         pdfs = crawl_for_pdfs(website, depth=2)
-    #         if pdfs:
-    #             company_websites[(name, website)] = pdfs
+async def main():
+    # extract company names from excel by Serp API
+    # company_names = extract_company_names_from_excel("./data/input/ai_automation_project.xlsx")
 
+    """
+    Task 1:
+    Links can be filtered by determining if they contain specific English keywords.
+    In cases where no English word is detected in the title, the algorithm examines the content of the PDF for optimization purposes. 
+    It then checks for the presence of finance-related words across all European languages.
+    The output is saved to the "llm-project/data/output/"Filtered-PDFs-Given-in-Sheet".xlsx" directory.
+    """
+    # await process_company_pdfs()
 
-    # TEST: this is mock company website list
-    mock_websites = ['https://www.bancsabadell.com/bsnacional/es/particulares/', 'https://www.ems-group.com/en/about-ems/about-ems/ems-at-a-glance/', 'https://www.swisslife.com/en/home.html', 'https://worldline.com/', 'https://www.givaudan.com/']         
-    mock_websites_2 = ['https://www.bancsabadell.com/bsnacional/es/particulares/', 'https://www.ems-group.com/en/about-ems/about-ems/ems-at-a-glance/']         
-    mock_websites_3 = [('swisslife', 'https://www.swisslife.com/en/home.html'), ('worldline', 'https://worldline.com/'), ('givaudan','https://www.givaudan.com/')]         
-    mock_websites_4 = [('givaudan','https://www.givaudan.com/')]         
+    """
+    From the provided Excel input, the algorithm scans the given PDF links to filter out those containing finance-related words in their URLs. 
+    The output is saved to the "llm-project/data/output/Scraped-Website-PDFs.xlsx" directory.
+    """ 
+    await process_given_company_pdfs()
 
-    for (name, website) in mock_websites_3:
-        if website != "Website not found.":
-            pdfs = crawl_for_pdfs(website, depth=2)
-            if pdfs:
-                company_websites[(name, website)] = pdfs
-                print(f"{website}: {pdfs}")
+async def process_company_pdfs():
+    company_websites = [('Segro', 'https://www.segro.com/')]
+    connector = TCPConnector(limit=10)
+    async with aiohttp.ClientSession(connector=connector) as session:
+        tasks = []
+        visited_pdf_links = []
+        for (name, website) in company_websites:
+            print(f"Start scraping pdfs for {name} by the website {website}")
+            if website != "Website not found.":
+                # Create task for each website
+                task = crawl_for_pdfs(name, website, website, visited_pdf_links, depth=2, session=session)
+                tasks.append(task)
 
-    write_filtered_pdfs_to_file(company_websites)
+        # Await tasks and gather results
+        results = await asyncio.gather(*tasks)
 
-    
-    # #uncomment when using serp api getting pdfs for websites
-    # result = {} 
-    # for website, pdfs in company_pdfs.items():
-    #     result[website] = []
-    #     for pdf_url in pdfs:
-    #         result[website].append(analyze_url_for_financial_content(pdf_url))
-    #     print(f"Website {website},\npdfs containing finance related keywords: {result[website]}\n\n")
+        # Process and print results``
+        for result in results:
+            # Assuming result is a list of PDF URLs
+            for pdf_url in result:
+                print(pdf_url)
+     
+async def process_given_company_pdfs():    
+    company_pdfs = extract_ei_pairs_from_excel()
 
+    connector = TCPConnector(limit=10)
+    async with aiohttp.ClientSession(connector=connector) as session:
+        tasks = []
+        for (name, pdf) in company_pdfs:
+            if pdf != "Website not found.":
+                task = filter_given_pdf_links(name, pdf)
+                tasks.append(task)
+
+        # Await tasks and gather results
+        results = await asyncio.gather(*tasks)
+
+        # Process and print results
+        for result in results:
+            # Assuming result is a list of PDF URLs
+            for pdf_url in result:
+                print(pdf_url)
+     
 if __name__ == "__main__":
-    main()
+    start_time = time.time()
+    print("Application is started: ")
+    print(asyncio.run(main()))
+    end_time = time.time()
+    execution_time = end_time - start_time
+    print(f"Execution time: {execution_time} seconds")
+
+
